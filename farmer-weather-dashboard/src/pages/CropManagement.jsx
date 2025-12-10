@@ -1,0 +1,334 @@
+import React, { useState, useEffect } from 'react';
+import { PageHeader } from '../components/PageHeader';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { Modal } from '../components/Modal';
+import { Input } from '../components/Input';
+import { ToggleSwitch } from '../components/ToggleSwitch';
+import { cropAPI } from '../utils/api';
+import { Plus, Edit2, Trash2, Sprout, Mail } from 'lucide-react';
+import { auth } from '../utils/auth';
+
+export default function CropManagement() {
+    const [crops, setCrops] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCrop, setEditingCrop] = useState(null);
+
+    const user = auth.getUser();
+    const farmerId = user?.id || 1;
+
+    // Form state
+    const [formData, setFormData] = useState({
+        cropName: '',
+        season: '',
+        minTemp: '',
+        maxTemp: '',
+        minRain: '',
+        maxRain: '',
+        minWind: '',
+        maxWind: '',
+        emailEnabled: true
+    });
+
+    useEffect(() => {
+        const fetchCrops = async () => {
+            try {
+                setLoading(true);
+                const cropsData = await cropAPI.getCrops(farmerId);
+                setCrops(cropsData);
+            } catch (err) {
+                console.error('Error fetching crops:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCrops();
+    }, [farmerId]);
+
+    const handleOpenModal = (crop = null) => {
+        if (crop) {
+            setEditingCrop(crop);
+            setFormData({
+                cropName: crop.cropName || '',
+                season: crop.season || '',
+                minTemp: crop.minTemp || '',
+                maxTemp: crop.maxTemp || '',
+                minRain: crop.minRain || '',
+                maxRain: crop.maxRain || '',
+                minWind: crop.minWind || '',
+                maxWind: crop.maxWind || '',
+                emailEnabled: crop.emailEnabled !== undefined ? crop.emailEnabled : true
+            });
+        } else {
+            setEditingCrop(null);
+            setFormData({
+                cropName: '',
+                season: '',
+                minTemp: '',
+                maxTemp: '',
+                minRain: '',
+                maxRain: '',
+                minWind: '',
+                maxWind: '',
+                emailEnabled: true
+            });
+        }
+        setIsModalOpen(true);
+    };
+
+    const handleSave = async () => {
+        if (!formData.cropName || !formData.season) {
+            alert('Please fill in crop name and season');
+            return;
+        }
+
+        try {
+            const cropData = {
+                cropName: formData.cropName,
+                season: formData.season,
+                minTemp: formData.minTemp ? parseFloat(formData.minTemp) : null,
+                maxTemp: formData.maxTemp ? parseFloat(formData.maxTemp) : null,
+                minRain: formData.minRain ? parseFloat(formData.minRain) : null,
+                maxRain: formData.maxRain ? parseFloat(formData.maxRain) : null,
+                minWind: formData.minWind ? parseFloat(formData.minWind) : null,
+                maxWind: formData.maxWind ? parseFloat(formData.maxWind) : null,
+                emailEnabled: formData.emailEnabled
+            };
+
+            if (editingCrop) {
+                await cropAPI.updateCrop(editingCrop.id, farmerId, cropData);
+            } else {
+                await cropAPI.addCrop(farmerId, cropData);
+            }
+
+            // Refresh crops list
+            const cropsData = await cropAPI.getCrops(farmerId);
+            setCrops(cropsData);
+            setIsModalOpen(false);
+        } catch (err) {
+            console.error('Error saving crop:', err);
+            alert('Error saving crop: ' + err.message);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this crop?')) {
+            try {
+                await cropAPI.deleteCrop(id, farmerId);
+                const cropsData = await cropAPI.getCrops(farmerId);
+                setCrops(cropsData);
+            } catch (err) {
+                console.error('Error deleting crop:', err);
+                alert('Error deleting crop: ' + err.message);
+            }
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="space-y-8">
+                <PageHeader title="Crop Management" description="Loading..." />
+                <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            <PageHeader
+                title="Crop Management"
+                description="Manage your crops and their alert settings."
+                action={
+                    <Button onClick={() => handleOpenModal()} className="shadow-lg shadow-primary-500/20">
+                        <Plus className="w-5 h-5 mr-2 inline" />
+                        Add New Crop
+                    </Button>
+                }
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {crops.map((crop) => (
+                    <Card key={crop.id} className="relative group hover:shadow-xl transition-all duration-300 border-transparent hover:border-primary-100">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center space-x-4">
+                                <div className="p-3 bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl group-hover:scale-110 transition-transform duration-300">
+                                    <Sprout className="w-8 h-8 text-primary-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-display font-bold text-lg text-gray-900">{crop.cropName}</h3>
+                                    <p className="text-sm font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">{crop.season}</p>
+                                </div>
+                            </div>
+                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
+                                <button
+                                    onClick={() => handleOpenModal(crop)}
+                                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                >
+                                    <Edit2 size={18} />
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(crop.id)}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Crop Details */}
+                        <div className="space-y-2 mb-4 pt-4 border-t border-gray-50">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                    <span className="text-gray-500">Min Temp:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.minTemp?.toFixed(1) || '-'}°C</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Max Temp:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.maxTemp?.toFixed(1) || '-'}°C</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Min Rain:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.minRain?.toFixed(1) || '-'}mm</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Max Rain:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.maxRain?.toFixed(1) || '-'}mm</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Min Wind:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.minWind?.toFixed(1) || '-'}km/h</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Max Wind:</span>
+                                    <span className="ml-2 font-medium text-gray-900">{crop.maxWind?.toFixed(1) || '-'}km/h</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Mail size={16} className={crop.emailEnabled ? "text-primary-500" : "text-gray-400"} />
+                                <span className="text-sm font-medium text-gray-600">Email Alerts</span>
+                            </div>
+                            <ToggleSwitch
+                                checked={crop.emailEnabled !== false}
+                                onChange={async (checked) => {
+                                    try {
+                                        await cropAPI.updateCrop(crop.id, farmerId, {
+                                            ...crop,
+                                            emailEnabled: checked
+                                        });
+                                        const cropsData = await cropAPI.getCrops(farmerId);
+                                        setCrops(cropsData);
+                                    } catch (err) {
+                                        console.error('Error updating email alerts:', err);
+                                    }
+                                }}
+                            />
+                        </div>
+                    </Card>
+                ))}
+
+                {/* Empty State */}
+                {crops.length === 0 && (
+                    <div className="col-span-full py-16 text-center">
+                        <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Sprout className="w-12 h-12 text-gray-300" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900">No crops added yet</h3>
+                        <p className="text-gray-500 mt-1 mb-6">Start by adding your first crop to track.</p>
+                        <Button onClick={() => handleOpenModal()}>
+                            <Plus className="w-4 h-4 mr-2 inline" />
+                            Add Crop
+                        </Button>
+                    </div>
+                )}
+            </div>
+
+            {/* Add/Edit Modal */}
+            <Modal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title={editingCrop ? 'Edit Crop' : 'Add New Crop'}
+            >
+                <div className="space-y-6">
+                    <Input
+                        label="Crop Name"
+                        placeholder="e.g. Wheat"
+                        value={formData.cropName}
+                        onChange={(e) => setFormData({ ...formData, cropName: e.target.value })}
+                    />
+                    <Input
+                        label="Season"
+                        placeholder="e.g. Rabi, Kharif, Zaid"
+                        value={formData.season}
+                        onChange={(e) => setFormData({ ...formData, season: e.target.value })}
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="Min Temperature (°C)"
+                            type="number"
+                            placeholder="e.g. 15"
+                            value={formData.minTemp}
+                            onChange={(e) => setFormData({ ...formData, minTemp: e.target.value })}
+                        />
+                        <Input
+                            label="Max Temperature (°C)"
+                            type="number"
+                            placeholder="e.g. 35"
+                            value={formData.maxTemp}
+                            onChange={(e) => setFormData({ ...formData, maxTemp: e.target.value })}
+                        />
+                        <Input
+                            label="Min Rainfall (mm)"
+                            type="number"
+                            placeholder="e.g. 50"
+                            value={formData.minRain}
+                            onChange={(e) => setFormData({ ...formData, minRain: e.target.value })}
+                        />
+                        <Input
+                            label="Max Rainfall (mm)"
+                            type="number"
+                            placeholder="e.g. 150"
+                            value={formData.maxRain}
+                            onChange={(e) => setFormData({ ...formData, maxRain: e.target.value })}
+                        />
+                        <Input
+                            label="Min Wind (km/h)"
+                            type="number"
+                            placeholder="e.g. 5"
+                            value={formData.minWind}
+                            onChange={(e) => setFormData({ ...formData, minWind: e.target.value })}
+                        />
+                        <Input
+                            label="Max Wind (km/h)"
+                            type="number"
+                            placeholder="e.g. 30"
+                            value={formData.maxWind}
+                            onChange={(e) => setFormData({ ...formData, maxWind: e.target.value })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                        <div>
+                            <span className="text-sm font-semibold text-gray-900 block">Email Alerts</span>
+                            <span className="text-xs text-gray-500">Receive email notifications</span>
+                        </div>
+                        <ToggleSwitch
+                            checked={formData.emailEnabled}
+                            onChange={(checked) => setFormData({ ...formData, emailEnabled: checked })}
+                        />
+                    </div>
+                    <div className="pt-2 flex justify-end space-x-3">
+                        <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSave}>
+                            {editingCrop ? 'Save Changes' : 'Add Crop'}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+        </div>
+    );
+}
