@@ -4,16 +4,26 @@ import com.example.aispring.dto.AiChatRequest;
 import com.example.aispring.dto.FarmerProfile;
 import com.example.aispring.entity.AiChatRecord;
 import com.example.aispring.repository.AiChatRecordRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class AiChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(AiChatService.class);
 
     private final WebClient.Builder webClientBuilder;
     private final AiChatRecordRepository aiChatRecordRepository;
@@ -21,47 +31,159 @@ public class AiChatService {
     @Value("${spring.ai.backend.base-url:http://localhost:8080}")
     private String backendBaseUrl;
 
+    // Gemini API key – read from configuration / environment, not hard-coded
+    @Value("${gemini.api.key}")
+    private String geminiApiKey;
+
+    // Base URL for Gemini 2.5 Flash – we pass the key in the header, not as a query param
+    @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent}")
+    private String geminiApiUrl;
+    private static final String AGRI_PROMPT = "You are an agriculture-only assistant. "
+            + "Respond with a single short paragraph (max ~3 sentences). "
+            + "Decline anything not clearly agriculture, farming, crop, soil, weather-for-farming, irrigation, pest, fertilizer, livestock, or agri-tech.";
+    private static final String NON_AGRI_RESPONSE = "Please ask an agriculture-related question.";
+    private static final int MAX_MESSAGES_PER_USER = 5;
+    private static final String MESSAGE_LIMIT_REACHED = "You have reached the maximum limit of 5 messages. Please contact support for assistance.";
+
     public String handleChat(AiChatRequest request, String authHeader) {
-        FarmerProfile profile = fetchProfile(authHeader);
-        String prompt=buildPrompt();
-        String reply = generateHi();
+        // 1) Build the user message safely
+        String userMessage = request.getMessage() != null ? request.getMessage().trim() : "";
 
+        // 2) Decide what to send to Gemini
+        String reply;
+        if (!isAgricultureQuestion(userMessage)) {
+            // Non-agriculture queries get a fixed response
+            reply = NON_AGRI_RESPONSE;
+        } else {
+            // Call Gemini to generate the farming answer
+            reply = generateGeminiReply(userMessage);
+        }
 
+        // 3) Try to get user profile and save full chat record to MongoDB (optional)
+        try {
+            FarmerProfile profile = fetchProfile(authHeader);
 
+            if (profile != null && profile.getId() != null) {
+                try {
+                    AiChatRecord record = new AiChatRecord();
+                    record.setUserId(profile.getId());
+                    record.setUserName(profile.getName() != null ? profile.getName() : "Unknown");
+                    record.setLanguage(request.getLanguage() != null ? request.getLanguage() : "en");
+                    record.setRequestMessage(userMessage);
+                    record.setResponse(reply);
+                    aiChatRecordRepository.save(record);
+                    log.info("Chat record saved successfully for user: {}", profile.getId());
+                } catch (Exception e) {
+                    log.warn("Failed to save chat record to MongoDB (continuing anyway): {}", e.getMessage());
+                }
+            } else {
+                log.warn("Profile is null or missing ID, skipping MongoDB save");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch profile or save to MongoDB (continuing anyway): {}", e.getMessage());
+        }
 
-        AiChatRecord record = new AiChatRecord();
-        record.setUserId(profile.getId());
-        record.setUserName(profile.getName());
-        record.setLanguage(request.getLanguage());
-        record.setRequestMessage(request.getMessage());
-        record.setResponse(reply);
-        aiChatRecordRepository.save(record);
-
+        // 4) Always return the AI reply to the caller
         return reply;
     }
 
     private FarmerProfile fetchProfile(String authHeader) {
-        WebClient client = webClientBuilder.baseUrl(backendBaseUrl).build();
-        return client.get()
-                .uri("/farmer/profile")
-                .header(HttpHeaders.AUTHORIZATION, authHeader)
-                .retrieve()
-                .bodyToMono(FarmerProfile.class)
-                .onErrorResume(ex -> Mono.error(new RuntimeException("Failed to fetch user profile", ex)))
-                .block();
+        try {
+            log.info("Attempting to fetch profile from backend: {}", backendBaseUrl);
+            WebClient client = webClientBuilder.baseUrl(backendBaseUrl).build();
+            
+            FarmerProfile profile = client.get()
+                    .uri("/farmer/profile")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .retrieve()
+                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), 
+                            response -> {
+                                log.warn("Backend returned error status: {}", response.statusCode());
+                                return Mono.empty(); // Return empty instead of error
+                            })
+                    .bodyToMono(FarmerProfile.class)
+                    .onErrorResume(ex -> {
+                        log.warn("Error fetching profile (will continue without it): {}", ex.getMessage());
+                        return Mono.empty(); // Return empty instead of error
+                    })
+                    .block();
+            
+            if (profile != null && profile.getId() != null) {
+                log.info("Successfully fetched profile for user ID: {}", profile.getId());
+                return profile;
+            } else {
+                log.warn("Profile is null or missing ID");
+                return null;
+            }
+        } catch (Exception e) {
+            log.warn("Exception fetching profile (will continue without it): {}", e.getMessage());
+            return null; // Return null instead of throwing exception
+        }
     }
 
-    private String generateHi() {
-        return "hi";
+    private boolean isAgricultureQuestion(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String lower = message.toLowerCase();
+        return lower.contains("farm") || lower.contains("crop") || lower.contains("soil") || lower.contains("agri")
+                || lower.contains("irrigation") || lower.contains("pest") || lower.contains("fertilizer")
+                || lower.contains("livestock") || lower.contains("harvest") || lower.contains("weather")
+                || lower.contains("yield") || lower.contains("plant") || lower.contains("seed");
     }
 
-    private String buildPrompt() {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Generate a professional email reply for the following email content. Please dont generate a subject line");
-    
-        return prompt.toString();
+    private String generateGeminiReply(String userMessage) {
+        WebClient client = webClientBuilder.build();
+        String prompt = AGRI_PROMPT + " User question: " + userMessage;
+        Map<String, Object> payload = Map.of(
+                "contents", List.of(
+                        Map.of("parts", List.of(Map.of("text", prompt)))
+                )
+        );
+
+        try {
+            String raw = client.post()
+                    .uri(geminiApiUrl)
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                    // New style auth: API key in header, not in query string
+                    .header("x-goog-api-key", geminiApiKey)
+                    .bodyValue(payload)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            String text = extractText(raw);
+            if (text == null || text.isBlank()) {
+                log.warn("Gemini returned empty text for prompt");
+                return "Sorry, I couldn't generate a response right now.";
+            }
+            text = text.replace("\n", " ").trim();
+            return text.length() > 600 ? text.substring(0, 600) : text;
+        } catch (WebClientResponseException wcre) {
+            log.error("Gemini API error status={} body={}", wcre.getStatusCode(), wcre.getResponseBodyAsString(), wcre);
+            return "Sorry, I couldn't generate a response right now.";
+        } catch (Exception ex) {
+            log.error("Gemini call failed", ex);
+            return "Sorry, I couldn't generate a response right now.";
+        }
     }
 
-
+    private String extractText(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(raw);
+            return root.path("candidates")
+                    .path(0)
+                    .path("content")
+                    .path("parts")
+                    .path(0)
+                    .path("text")
+                    .asText(null);
+        } catch (Exception ex) {
+            log.error("Failed to parse Gemini response", ex);
+            return null;
+        }
+    }
 }
 

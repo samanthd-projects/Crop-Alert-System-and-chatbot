@@ -81,8 +81,22 @@ export function Chatbot() {
         });
 
         if (!response.ok) {
-            const errorMessage = await response.text().catch(() => '');
-            throw new Error(errorMessage || 'AI service error');
+            // Try to parse as JSON first (our backend returns JSON error responses)
+            let errorMessage = 'AI service error';
+            try {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.reply || errorData.message || errorMessage;
+                } else {
+                    const text = await response.text();
+                    errorMessage = text || errorMessage;
+                }
+            } catch (e) {
+                // If parsing fails, use default message
+                console.error('Error parsing error response:', e);
+            }
+            throw new Error(errorMessage);
         }
 
         const data = await response.json();
