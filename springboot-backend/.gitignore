@@ -34,3 +34,21 @@ build/
 ### Mac ###
 .DS_Store
 
+### Sensitive Configuration Files ###
+# IMPORTANT: Never commit application.properties with real credentials
+src/main/resources/application.properties
+application.properties
+
+### Environment Files ###
+.env
+.env.local
+.env.production
+
+### Logs ###
+logs/
+*.log
+
+### Database ###
+*.db
+*.sqlite
+

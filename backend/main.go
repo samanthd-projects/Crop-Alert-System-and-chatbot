@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -16,9 +17,17 @@ import (
 const (
 	// Get your free API key from https://openweathermap.org/api
 	// Sign up is free and takes 2 minutes
-	OpenWeatherAPIKey  = "e58364c6f5bdd064916ca76878172898"
+	// Set this as environment variable: OPENWEATHER_API_KEY
+	OpenWeatherAPIKey  = getEnvOrDefault("OPENWEATHER_API_KEY", "YOUR_API_KEY_HERE")
 	OpenWeatherBaseURL = "https://api.openweathermap.org/data/2.5"
 )
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 type WeatherResponse struct {
 	Location string      `json:"location"`

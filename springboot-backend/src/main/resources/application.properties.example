@@ -1,8 +1,13 @@
 # ============================================
 # FARMER WEATHER DASHBOARD - SPRING BOOT BACKEND
+# EXAMPLE CONFIGURATION FILE
 # ============================================
-# Configuration now uses environment variables from .env file
-# See .env.example for required variables
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to: application.properties
+# 2. Replace all YOUR_* placeholders with actual values
+# 3. NEVER commit application.properties to git
+#
 # ============================================
 
 # Server Configuration
@@ -11,9 +16,9 @@ server.port=8080
 # ============================================
 # DATABASE CONFIGURATION (MySQL)
 # ============================================
-spring.datasource.url=jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:farmer_details}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-spring.datasource.username=${DB_USERNAME:root}
-spring.datasource.password=${DB_PASSWORD}
+spring.datasource.url=jdbc:mysql://localhost:3306/farmer_details?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=YOUR_MYSQL_PASSWORD
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
 # JPA/Hibernate Configuration
@@ -28,11 +33,11 @@ spring.jpa.properties.hibernate.format_sql=true
 # For Gmail, you need to:
 # 1. Enable 2-factor authentication
 # 2. Generate an App Password: https://myaccount.google.com/apppasswords
-# 3. Add credentials to .env file
-spring.mail.host=${MAIL_HOST:smtp.gmail.com}
-spring.mail.port=${MAIL_PORT:587}
-spring.mail.username=${MAIL_USERNAME}
-spring.mail.password=${MAIL_PASSWORD}
+# 3. Use the App Password below (not your regular Gmail password)
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=YOUR_EMAIL@gmail.com
+spring.mail.password=YOUR_GMAIL_APP_PASSWORD
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.properties.mail.smtp.starttls.required=true
@@ -44,12 +49,12 @@ spring.mail.properties.mail.smtp.writetimeout=5000
 # WEATHER API CONFIGURATION (Go Service)
 # ============================================
 # Go Weather Service URL (running on port 8081)
-weather.api.base-url=${WEATHER_API_BASE_URL:http://localhost:8081}
+weather.api.base-url=http://localhost:8081
 weather.api.current-endpoint=/weather/current
 
-# OpenWeather API Key (from .env file)
+# OpenWeather API Key (used by Go service)
 # Get your free key from: https://openweathermap.org/api
-weather.api.key=${WEATHER_API_KEY}
+weather.api.key=YOUR_OPENWEATHER_API_KEY
 
 # ============================================
 # CORS CONFIGURATION
@@ -64,4 +69,3 @@ spring.web.cors.allowed-headers=*
 logging.level.com.farmer=DEBUG
 logging.level.org.springframework.web=INFO
 logging.level.org.springframework.security=DEBUG
-

@@ -3,6 +3,29 @@ target/
 .DS_Store
 *.iml
 
-# Local secrets
+### Sensitive Configuration Files ###
+# IMPORTANT: Never commit application.properties with real API keys
+src/main/resources/application.properties
+application.properties
+
+### Environment Files ###
 .env
+.env.local
+.env.production
+
+### Logs ###
+logs/
+*.log
+
+### IDE ###
+.vscode/
+.settings/
+.classpath
+.project
+
+### Mac ###
+.DS_Store
+
+### Windows ###
+Thumbs.db
 

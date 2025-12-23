@@ -8,16 +8,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class AiSpringApplication {
 
     public static void main(String[] args) {
-        // Load variables from .env (if present) before Spring starts
+        // Load variables from .env file before Spring starts
         Dotenv dotenv = Dotenv.configure()
-                .ignoreIfMissing() // don't fail if .env is not there
+                .ignoreIfMissing() // Don't fail if .env is not present
                 .load();
 
-        String geminiKey = dotenv.get("GEMINI_API_KEY");
-        if (geminiKey != null && !geminiKey.isBlank()) {
-            // Expose as system property so Spring property placeholders can read it
-            System.setProperty("GEMINI_API_KEY", geminiKey);
-        }
+        // Set environment variables as system properties so Spring can read them
+        dotenv.entries().forEach(entry -> 
+            System.setProperty(entry.getKey(), entry.getValue())
+        );
 
         SpringApplication.run(AiSpringApplication.class, args);
     }

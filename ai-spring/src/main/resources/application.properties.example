@@ -1,8 +1,13 @@
 # ============================================
 # AI SPRING SERVICE - AGRICULTURE AI CHATBOT
+# EXAMPLE CONFIGURATION FILE
 # ============================================
-# Configuration now uses environment variables from .env file
-# See .env.example for required variables
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to: application.properties
+# 2. Replace all YOUR_* placeholders with actual values
+# 3. NEVER commit application.properties to git
+#
 # ============================================
 
 # Server Configuration
@@ -11,12 +16,12 @@ server.port=8082
 # ============================================
 # MONGODB CONFIGURATION (MongoDB Atlas)
 # ============================================
-# MongoDB Atlas connection string (from .env file)
+# MongoDB Atlas connection string
 # Format: mongodb+srv://username:password@cluster.mongodb.net/
 # Note: URL-encode special characters (e.g., @ becomes %40)
 # Get your connection string from: https://cloud.mongodb.com/
-spring.data.mongodb.uri=${MONGODB_URI}
-spring.data.mongodb.database=${MONGODB_DATABASE:fitness-ai-response}
+spring.data.mongodb.uri=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/?appName=Cluster0&tls=true&retryWrites=true&w=majority&serverSelectionTimeoutMS=5000&connectTimeoutMS=10000&socketTimeoutMS=10000
+spring.data.mongodb.database=fitness-ai-response
 # Make MongoDB connection optional - app will work even if MongoDB fails
 spring.data.mongodb.auto-index-creation=false
 
@@ -24,17 +29,20 @@ spring.data.mongodb.auto-index-creation=false
 # SPRING BOOT BACKEND CONFIGURATION
 # ============================================
 # Main backend service URL (for JWT validation and user profile)
-spring.ai.backend.base-url=${BACKEND_BASE_URL:http://localhost:8080}
+spring.ai.backend.base-url=http://localhost:8080
 
 # ============================================
 # GOOGLE GEMINI AI CONFIGURATION
 # ============================================
 # Get your free API key from: https://aistudio.google.com/app/apikey
-# Add to .env file
-gemini.api.key=${GEMINI_API_KEY}
+# 1. Sign in with your Google account
+# 2. Click "Create API Key"
+# 3. Copy the key (starts with AIza...)
+# 4. Paste it below
+gemini.api.key=YOUR_GEMINI_API_KEY_HERE
 
 # Gemini API URL - using 2.5 Flash model with header-based auth
-gemini.api.url=${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent}
+gemini.api.url=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
 
 # ============================================
 # NOTES
@@ -44,4 +52,5 @@ gemini.api.url=${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta
 # - Stores chat history in MongoDB Atlas
 # - Validates user authentication via Spring Boot Backend
 # - Only responds to agriculture-related questions
+
 
