@@ -35,6 +35,19 @@ public class AiChatController {
         return ResponseEntity.ok(Map.of("status", "ok", "service", "ai-spring"));
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/test-gemini-key")
+    public ResponseEntity<Map<String, Object>> testGeminiKey() {
+        String keyFromConfig = System.getProperty("GEMINI_API_KEY");
+        String keyFromEnv = System.getenv("GEMINI_API_KEY");
+        
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("keyFromSystemProperty", keyFromConfig != null ? keyFromConfig.substring(0, Math.min(10, keyFromConfig.length())) + "..." : "null");
+        response.put("keyFromEnvVar", keyFromEnv != null ? keyFromEnv.substring(0, Math.min(10, keyFromEnv.length())) + "..." : "null");
+        response.put("keyFromService", aiChatService.getGeminiApiKeyStatus());
+        
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/respond")
     public ResponseEntity<AiChatResponseDto> respond(
             @Valid @RequestBody AiChatRequest request,

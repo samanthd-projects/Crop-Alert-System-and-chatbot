@@ -31,9 +31,9 @@ public class AiChatService {
     @Value("${spring.ai.backend.base-url:http://localhost:8080}")
     private String backendBaseUrl;
 
-    // Gemini API key – read from configuration / environment, not hard-coded
-    @Value("${gemini.api.key}")
-    private String geminiApiKey;
+    // Gemini API key – hardcoded (exactly matching your working curl)
+    // Your curl key: AIzaSyCxAiM-nrnLaPrPdtW7EEkZAf89UgR63vw
+    private static final String GEMINI_API_KEY = "AIzaSyCdsf4YITumx4LZrCnEwUS6FcqscFJsFPo";
 
     // Base URL for Gemini 2.5 Flash – we pass the key in the header, not as a query param
     @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent}")
@@ -44,6 +44,16 @@ public class AiChatService {
     private static final String NON_AGRI_RESPONSE = "Please ask an agriculture-related question.";
     private static final int MAX_MESSAGES_PER_USER = 5;
     private static final String MESSAGE_LIMIT_REACHED = "You have reached the maximum limit of 5 messages. Please contact support for assistance.";
+
+    // Helper method to check API key status (for debugging)
+    public Map<String, String> getGeminiApiKeyStatus() {
+        Map<String, String> status = new java.util.HashMap<>();
+        status.put("hardcodedKey", GEMINI_API_KEY != null && !GEMINI_API_KEY.isBlank() ? 
+                GEMINI_API_KEY.substring(0, Math.min(10, GEMINI_API_KEY.length())) + "..." : "null/empty");
+        status.put("fromSystemProperty", System.getProperty("GEMINI_API_KEY") != null ? "present" : "null");
+        status.put("fromEnvVar", System.getenv("GEMINI_API_KEY") != null ? "present" : "null");
+        return status;
+    }
 
     public String handleChat(AiChatRequest request, String authHeader) {
         // 1) Build the user message safely
@@ -133,38 +143,104 @@ public class AiChatService {
     }
 
     private String generateGeminiReply(String userMessage) {
+        // Using hardcoded API key (exactly matching your working curl)
+        String apiKey = GEMINI_API_KEY;
+        
         WebClient client = webClientBuilder.build();
         String prompt = AGRI_PROMPT + " User question: " + userMessage;
+        
+        // Build payload exactly matching your curl format
         Map<String, Object> payload = Map.of(
                 "contents", List.of(
-                        Map.of("parts", List.of(Map.of("text", prompt)))
+                        Map.of("parts", List.of(
+                                Map.of("text", prompt)
+                        ))
                 )
         );
 
         try {
             String raw = client.post()
                     .uri(geminiApiUrl)
-                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                    // New style auth: API key in header, not in query string
-                    .header("x-goog-api-key", geminiApiKey)
+                    .header("Content-Type", "application/json")
+                    .header("x-goog-api-key", apiKey)
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
-            String text = extractText(raw);
-            if (text == null || text.isBlank()) {
-                log.warn("Gemini returned empty text for prompt");
+            if (raw == null || raw.isBlank()) {
                 return "Sorry, I couldn't generate a response right now.";
             }
+            
+            String text = extractText(raw);
+            if (text == null || text.isBlank()) {
+                // Try alternative parsing if standard path fails
+                text = extractTextAlternative(raw);
+                if (text == null || text.isBlank()) {
+                    return "Sorry, I couldn't generate a response right now.";
+                }
+            }
+            
             text = text.replace("\n", " ").trim();
             return text.length() > 600 ? text.substring(0, 600) : text;
         } catch (WebClientResponseException wcre) {
-            log.error("Gemini API error status={} body={}", wcre.getStatusCode(), wcre.getResponseBodyAsString(), wcre);
-            return "Sorry, I couldn't generate a response right now.";
+            // Return a more helpful error message
+            String errorMsg = "API Error: " + wcre.getStatusCode();
+            try {
+                String errorBody = wcre.getResponseBodyAsString();
+                if (errorBody != null && !errorBody.isBlank()) {
+                    // Try to extract error message from JSON
+                    try {
+                        ObjectMapper mapper = new ObjectMapper();
+                        JsonNode errorJson = mapper.readTree(errorBody);
+                        if (errorJson.has("error")) {
+                            JsonNode error = errorJson.get("error");
+                            if (error.has("message")) {
+                                errorMsg = error.get("message").asText();
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Use raw error body if JSON parsing fails
+                        errorMsg = errorBody.length() > 200 ? errorBody.substring(0, 200) : errorBody;
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+            return "Sorry, I couldn't generate a response right now. " + errorMsg;
         } catch (Exception ex) {
-            log.error("Gemini call failed", ex);
-            return "Sorry, I couldn't generate a response right now.";
+            return "Sorry, I couldn't generate a response right now. Error: " + ex.getMessage();
+        }
+    }
+    
+    private String extractTextAlternative(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(raw);
+            
+            // Try different possible response structures
+            if (root.has("candidates") && root.get("candidates").isArray() && root.get("candidates").size() > 0) {
+                JsonNode candidate = root.get("candidates").get(0);
+                if (candidate.has("content")) {
+                    JsonNode content = candidate.get("content");
+                    if (content.has("parts") && content.get("parts").isArray() && content.get("parts").size() > 0) {
+                        JsonNode part = content.get("parts").get(0);
+                        if (part.has("text")) {
+                            return part.get("text").asText();
+                        }
+                    }
+                }
+            }
+            
+            // Try direct text field
+            if (root.has("text")) {
+                return root.get("text").asText();
+            }
+            
+            return null;
+        } catch (Exception ex) {
+            return null;
         }
     }
 
