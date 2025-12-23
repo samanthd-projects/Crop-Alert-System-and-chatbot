@@ -310,9 +310,7 @@ For issues or questions:
 - [ ] Real-time notifications with WebSocket
 - [ ] Mobile app (React Native)
 - [ ] ML-based crop yield prediction
-- [ ] IoT sensor integration
 - [ ] Multi-language support
-- [ ] Offline PWA mode
 - [ ] Payment integration
 - [ ] Farmer community features
 
